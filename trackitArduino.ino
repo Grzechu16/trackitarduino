@@ -1,122 +1,138 @@
 #include <Sim800L.h>
 #include <TinyGPS++.h>
-#include <SoftwareSerial.h>
 TinyGPSPlus gps;
 
 String textMessage = "";
-//Create software serial object to communicate with SIM800L
-SoftwareSerial mySerial(2, 3); //SIM800L Tx & Rx is connected to Arduino #3 & #2
+float latitude = 0;
+float longitude = 0;
+int counter = 0;
+bool correctCoordinates = false;
 
 void setup()
 {
-  //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
-
-  //Begin serial communication with Arduino and SIM800L
-  mySerial.begin(9600);
-
-  Serial.println("Initializing...");
-  delay(1000);
-
-  mySerial.println("AT");
-    updateSerial();
-
-  mySerial.println("AT+CMGF=1"); // TEXT mode
-  updateSerial();
-  mySerial.println("AT+CNMI=2,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
-   updateSerial();
+  Serial1.begin(9600);
+  Serial3.begin(9600);
+  initializeGps();
 }
 
 void loop()
 {
 
-  while (Serial.available() > 0) {
-    gps.encode(Serial.read());
-    //if (gps.location.isUpdated()) {
-    //  Serial.print("Latitude= ");
-    //  Serial.print(gps.location.lat(), 6);
-    //  Serial.print(" Longitude= ");
-    //  Serial.println(gps.location.lng(), 6);
-   // }
-  }
-  
-  if (mySerial.available() > 0) {
-    textMessage = mySerial.readString();
-    //Serial.print(textMessage);
+ getCoordinates();
+
+  if (Serial3.available() > 0) {
+    textMessage = Serial3.readString();
+    textMessage.toUpperCase();
     delay(10);
-
-
-    // updateSerial();
   }
-  if (textMessage.indexOf("gps") >= 0) {
-    // Turn on relay and save current state
-    updateDatabase();
-    //Serial.println("Uruchamianie gps");
-    textMessage = "";
-
-  }
-  if (textMessage.indexOf("sms") >= 0) {
-    // Turn on relay and save current state
-
-    //Serial.println("Wysylanie sms");
-    textMessage = "";
-  }
-    if (textMessage.indexOf("delete") >= 0) {
-    // Turn on relay and save current state
-
-    //Serial.println("Usuwanie sms");
-    textMessage = "";
-    deleteSms();
+  if (textMessage.indexOf("GPS") >= 0) {
+    if (counter == 0) {
+      updateDatabase();
+      textMessage = "";
+    }
+    else
+      onlyUpdate();
+      textMessage = "";
   }
 }
 
 void updateDatabase() {
-  mySerial.println("AT");
-  delay(1000);
-  mySerial.println("AT+CPIN?");
-  delay(1000);
-  mySerial.println("AT+CREG?");
-  delay(1000);
-  mySerial.println("AT+CGATT?");
-  delay(1000);
-  mySerial.println("AT+CSQ");
-  delay(1000);
-  mySerial.println("AT+SAPBR=3,1,CONTYPE,GPRS");
-  delay(1000);
-  mySerial.println("AT+SAPBR=3,1,APN,INTERNET");
-  delay(1000);
-  mySerial.println("AT+SAPBR=1,1");
-  delay(1000);
-  mySerial.println("AT+SAPBR=2,1");
-  delay(1000);
-  mySerial.println("AT+HTTPINIT");
-  delay(1000);
-  mySerial.println("AT+HTTPPARA=CID,1");
-  delay(1000);
-  mySerial.println("AT+HTTPPARA=URL,http://arduinoandroidtrackit.000webhostapp.com/upload1.php?deviceid=731536061&lat=" + String(gps.location.lat(), 6) + "&lon=" + String(gps.location.lng(), 6));
-  delay(1000);
-  mySerial.println("AT+HTTPACTION=0");
-  delay(1000);
-
-}
-
-void deleteSms() {
-  mySerial.println("AT");
-  delay(1000);
-  mySerial.println("AT+CMGD=1,4");
-  delay(1000);
-  Serial.println("Sms memory cleared");
-}
-
-void updateSerial()
-{
-  delay(500);
-  while (Serial.available())
-  {
-    mySerial.write(Serial.read());//Forward what Serial received to Software Serial Port
+  Serial.println("Database update requested");
+  Serial.println("...");
+  if(correctCoordinates==true){
+  Serial.println("Coordinates OK");
+  Serial.println("...");
   }
-  while (mySerial.available())
+  counter = 1;
+
+  Serial3.println("AT");
+  delay(100);
+  Serial3.println("AT+CSQ");
+  delay(100);
+  Serial3.println("AT+SAPBR=3,1,CONTYPE,GPRS");
+  delay(100);
+  Serial3.println("AT+SAPBR=3,1,APN,INTERNET");
+  delay(100);
+  Serial3.println("AT+SAPBR=1,1");
+  delay(100);
+  Serial3.println("AT+SAPBR=2,1");
+  delay(100);
+  Serial3.println("AT+HTTPINIT");
+  delay(100);
+  Serial3.println("AT+HTTPPARA=CID,1");
+  delay(100);
+  Serial3.println("AT+HTTPPARA=URL,http://arduinoandroidtrackit.000webhostapp.com/upload1.php?deviceid=731536061&lat=" + String(latitude, 6) + "&lon=" + String(longitude, 6));
+  delay(100);
+  Serial3.println("AT+HTTPACTION=0");
+  delay(100);
+  Serial.println("Update completed");
+  Serial.println("...");
+}
+
+void onlyUpdate() {
+  Serial.println("Database update requested");
+  Serial.println("...");
+  
+  Serial3.println("AT+HTTPINIT");
+  delay(100);
+  Serial3.println("AT+HTTPPARA=CID,1");
+  delay(100);
+  Serial3.println("AT+HTTPPARA=URL,http://arduinoandroidtrackit.000webhostapp.com/upload1.php?deviceid=731536061&lat=" + String(latitude, 6) + "&lon=" + String(longitude, 6));
+  delay(100);
+  Serial3.println("AT+HTTPACTION=0");
+  delay(100);
+  Serial.println("Update completed");
+  Serial.println("...");
+}
+
+void initializeGps() {
+  Serial.println("Initializing module");
+  Serial.println("...");
+  
+  Serial3.println("AT");
+  delay(100);
+  Serial3.println("AT+CMGF=1"); 
+  delay(100);
+  Serial3.println("AT+CNMI=2,2,0,0,0"); 
+  delay(100);
+  Serial3.println("AT+CMGD=1,4");
+  delay(100);
+  Serial.println("Device initialized, sms memory cleared");
+  Serial.println("...");
+  Serial.println("Waiting for order");
+  Serial.println("...");
+}
+
+void updateSerial() {
+  delay(500);
+  //if(Serial1.available()){
+  //  Serial.write(Serial1.read());
+  //}
+  while (Serial3.available()) {
+    Serial.write(Serial3.read());
+  }
+}
+
+void getCoordinates(){
+   while (Serial1.available() > 0) {
+    if (gps.encode(Serial1.read()))
+      parseGps();
+  }
+}
+
+void parseGps()
+{
+  if (gps.location.isValid())
   {
-    Serial.write(mySerial.read());//Forward what Software Serial received to Serial Port
+    correctCoordinates = true;
+    longitude = gps.location.lng();
+    latitude = gps.location.lat();
+    delay(1000);
+  }
+  else
+  {
+    correctCoordinates = false;
+    delay(1000);
   }
 }
